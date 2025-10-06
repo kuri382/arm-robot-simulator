@@ -11,6 +11,16 @@ let joints = [];
 let targetAngles = [0, 0, 0, 0, 0, 0]; // 6 joints for SO-ARM101
 let jointNames = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll', 'gripper'];
 
+// 積み木用
+let blocks = [];
+
+// ロボットリンクの物理ボディ
+let robotBodies = new Map();
+
+// デバッグ用：コライダーの可視化
+let debugMode = true;
+let debugMeshes = [];
+
 // FPSカウンター
 let lastTime = performance.now();
 let frameCount = 0;
@@ -93,6 +103,9 @@ async function init() {
   // URDFロード
   await loadRobot();
 
+  // 積み木を作成
+  createBlocks();
+
   // UI設定
   setupUI();
 
@@ -113,7 +126,7 @@ async function loadRobot() {
   const loader = new URDFLoader();
 
   // デフォルトのマネージャーを取得
-  loader.manager.onStart = function(url, itemsLoaded, itemsTotal) {
+  loader.manager.onStart = function(url) {
     console.log('Started loading:', url);
   };
 
@@ -172,6 +185,9 @@ async function loadRobot() {
         // ジョイント情報を取得
         extractJoints();
 
+        // ロボットの物理コライダーを追加
+        addRobotColliders();
+
         console.log('Robot setup completed');
         console.log('Joints:', robot.joints);
 
@@ -224,6 +240,138 @@ function extractJoints() {
   });
 
   console.log('Extracted joints:', joints.map(j => j.name));
+}
+
+// 積み木を作成
+function createBlocks() {
+  const blockConfigs = [
+    { size: 0.025, position: { x: 0.35, y: 0.0225, z: 0 }, color: 0xff6b6b },
+    { size: 0.025, position: { x: 0.25, y: 0.0375, z: 0 }, color: 0x4ecdc4 },
+    { size: 0.025, position: { x: 0.28, y: 0.0125, z: 0 }, color: 0xffe66d },
+    { size: 0.03, position: { x: 0.22, y: 0.015, z: 0.05 }, color: 0x95e1d3 },
+  ];
+
+  blockConfigs.forEach((config, index) => {
+    createBlock(config.size, config.position, config.color, index);
+  });
+}
+
+// 個別の積み木を作成
+function createBlock(size, position, color, id) {
+  // ビジュアル（Three.js）
+  const geometry = new THREE.BoxGeometry(size, size, size);
+  const material = new THREE.MeshStandardMaterial({
+    color: color,
+    roughness: 0.5,
+    metalness: 0.1
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.set(position.x, position.y, position.z);
+  scene.add(mesh);
+
+  // 物理ボディ（Rapier）
+  const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+    .setTranslation(position.x, position.y, position.z);
+  const rigidBody = world.createRigidBody(rigidBodyDesc);
+
+  // コライダー（当たり判定）
+  const halfSize = size / 2;
+  const colliderDesc = RAPIER.ColliderDesc.cuboid(halfSize, halfSize, halfSize)
+    .setDensity(1.0)
+    .setFriction(0.8)
+    .setRestitution(0.3);
+  world.createCollider(colliderDesc, rigidBody);
+
+  // 管理用配列に追加
+  blocks.push({
+    id: id,
+    mesh: mesh,
+    body: rigidBody,
+    size: size
+  });
+
+  console.log(`Block ${id} created at`, position);
+}
+
+// ロボットのリンクに物理コライダーを追加
+function addRobotColliders() {
+  // グリッパーと主要なリンクにコライダーを追加
+  const linkColliders = [
+    { name: 'gripper_link', type: 'box', size:  [0.01, 0.04, 0.1], offset: [-0.015, 0, -0.05] },
+    { name: 'moving_jaw_so101_v1_link', type: 'box', size: [0.01, 0.15, 0.04], offset: [0, -0.01, 0.02] },
+    { name: 'wrist_link', type: 'box', size: [0.03, 0.05, 0.03] },
+    { name: 'lower_arm_link', type: 'box', size: [0.13, 0.03, 0.03] },
+    { name: 'upper_arm_link', type: 'box', size: [0.12, 0.03, 0.03] },
+  ];
+
+  linkColliders.forEach(config => {
+    const link = robot.links[config.name];
+    if (!link) {
+      console.warn(`Link ${config.name} not found`);
+      return;
+    }
+
+    // キネマティック剛体として作成（ロボット制御に追従）
+    const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased();
+    const body = world.createRigidBody(bodyDesc);
+
+    // コライダーを作成
+    let colliderDesc;
+    if (config.type === 'box') {
+      const [x, y, z] = config.size;
+      colliderDesc = RAPIER.ColliderDesc.cuboid(x / 2, y / 2, z / 2);
+    } else if (config.type === 'cylinder') {
+      colliderDesc = RAPIER.ColliderDesc.cylinder(config.height / 2, config.radius);
+    }
+
+    // 物理パラメータを設定
+    colliderDesc
+      .setFriction(1.5)           // 高摩擦で滑りにくく
+      .setRestitution(0.0)        // 弾性なし
+      .setDensity(1.0);           // 密度設定
+
+    const collider = world.createCollider(colliderDesc, body);
+
+    // デバッグ用：コライダーの可視化
+    let debugMesh = null;
+    if (debugMode) {
+      let debugGeometry;
+      if (config.type === 'box') {
+        const [x, y, z] = config.size;
+        debugGeometry = new THREE.BoxGeometry(x, y, z);
+      } else if (config.type === 'cylinder') {
+        debugGeometry = new THREE.CylinderGeometry(config.radius, config.radius, config.height, 16);
+      }
+
+      const debugMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3
+      });
+      debugMesh = new THREE.Mesh(debugGeometry, debugMaterial);
+      scene.add(debugMesh);
+      debugMeshes.push(debugMesh);
+    }
+
+    // リンクと物理ボディを関連付け（オフセット情報も保存）
+    const offset = config.offset || [0, 0, 0];
+    robotBodies.set(config.name, {
+      link: link,
+      body: body,
+      collider: collider,
+      debugMesh: debugMesh,
+      offset: new THREE.Vector3(offset[0], offset[1], offset[2])
+    });
+
+    console.log(`Collider added to ${config.name}`, {
+      type: config.type,
+      size: config.size,
+      offset: offset
+    });
+  });
 }
 
 // UI設定
@@ -309,12 +457,56 @@ function updateRobot() {
   });
 }
 
+// ロボットのコライダー位置を更新
+function updateRobotColliders() {
+  robotBodies.forEach((data) => {
+    const { link, body, debugMesh, offset } = data;
+
+    // リンクのワールド座標を取得
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
+
+    link.getWorldPosition(worldPos);
+    link.getWorldQuaternion(worldQuat);
+
+    // オフセットを適用（リンクのローカル座標系で）
+    if (offset) {
+      const offsetWorld = offset.clone().applyQuaternion(worldQuat);
+      worldPos.add(offsetWorld);
+    }
+
+    // 物理ボディの位置と回転を更新
+    body.setTranslation({ x: worldPos.x, y: worldPos.y, z: worldPos.z }, true);
+    body.setRotation({ x: worldQuat.x, y: worldQuat.y, z: worldQuat.z, w: worldQuat.w }, true);
+
+    // デバッグメッシュも同期
+    if (debugMesh) {
+      debugMesh.position.copy(worldPos);
+      debugMesh.quaternion.copy(worldQuat);
+    }
+  });
+}
+
 // アニメーションループ
 function animate() {
   requestAnimationFrame(animate);
 
-  // ロボット更新
+  // ロボット更新（キネマティクス）
   updateRobot();
+
+  // ロボットのコライダー位置を更新
+  updateRobotColliders();
+
+  // 物理ステップ
+  world.step();
+
+  // 積み木の位置を物理エンジンと同期
+  blocks.forEach(block => {
+    const pos = block.body.translation();
+    const rot = block.body.rotation();
+    block.mesh.position.set(pos.x, pos.y, pos.z);
+    block.mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
+  });
 
   controls.update();
   renderer.render(scene, camera);
