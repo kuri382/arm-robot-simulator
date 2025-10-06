@@ -18,7 +18,7 @@ let blocks = [];
 let robotBodies = new Map();
 
 // デバッグ用：コライダーの可視化
-let debugMode = false;
+let debugMode = true;
 let debugMeshes = [];
 
 // グリッピング関連
@@ -30,7 +30,7 @@ let previousGripperAngle = 0;
 let autoGripEnabled = true; // 自動グリップ機能のON/OFF
 const GRIP_THRESHOLD = 0.26; // グリッパーが閉じたと判定する角度（15度 = 0.262ラジアン）
 const RELEASE_THRESHOLD = 0.35; // グリッパーが開いたと判定する角度（20度）
-const GRIP_DISTANCE = 0.15;  // グリッパーから積み木までの最大距離（15cm）
+const GRIP_DISTANCE = 0.1;  // グリッパーから積み木までの最大距離（10cm）
 const USE_KINEMATIC_GRIP = true; // キネマティック制御を使用（振動を防ぐ）
 
 // FPSカウンター
@@ -44,7 +44,7 @@ async function init() {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 
   // 物理エンジンの精度設定
-  world.timestep = 1 / 120;  // より細かいタイムステップ
+  world.timestep = 1 / 120;
   world.maxVelocityIterations = 8;
   world.maxPositionIterations = 4;
 
