@@ -18,7 +18,7 @@ let blocks = [];
 let robotBodies = new Map();
 
 // デバッグ用：コライダーの可視化
-let debugMode = true;
+let debugMode = false;
 let debugMeshes = [];
 
 // FPSカウンター
@@ -30,6 +30,11 @@ async function init() {
   // Rapier初期化
   await RAPIER.init();
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+
+  // 物理エンジンの精度設定
+  world.timestep = 1 / 120;  // より細かいタイムステップ
+  world.maxVelocityIterations = 8;
+  world.maxPositionIterations = 4;
 
   // Three.js基本セットアップ
   scene = new THREE.Scene();
@@ -97,8 +102,10 @@ async function init() {
   scene.add(groundMesh);
 
   // 地面（物理）
-  const groundCollider = RAPIER.ColliderDesc.cuboid(1, 0.01, 1);
-  world.createCollider(groundCollider);
+  const groundColliderDesc = RAPIER.ColliderDesc.cuboid(1, 0.01, 1)
+    .setFriction(1.0)       // 地面の摩擦
+    .setRestitution(0.0);   // 地面の反発なし
+  world.createCollider(groundColliderDesc);
 
   // URDFロード
   await loadRobot();
@@ -280,9 +287,12 @@ function createBlock(size, position, color, id) {
   const halfSize = size / 2;
   const colliderDesc = RAPIER.ColliderDesc.cuboid(halfSize, halfSize, halfSize)
     .setDensity(1.0)
-    .setFriction(0.8)
-    .setRestitution(0.3);
+    .setFriction(1.2)     // 摩擦を上げて掴みやすく
+    .setRestitution(0.1); // 反発を抑える
   world.createCollider(colliderDesc, rigidBody);
+
+  // CCDを有効化（積み木のめり込み防止）
+  rigidBody.enableCcd(true);
 
   // 管理用配列に追加
   blocks.push({
@@ -333,6 +343,9 @@ function addRobotColliders() {
       .setDensity(1.0);           // 密度設定
 
     const collider = world.createCollider(colliderDesc, body);
+
+    // CCDを有効化（連続衝突検出でめり込みを防止）
+    body.enableCcd(true);
 
     // デバッグ用：コライダーの可視化
     let debugMesh = null;
