@@ -146,6 +146,12 @@ async function loadRobot() {
         // スケール調整（メートル単位に）
         robot.scale.set(1, 1, 1);
 
+        // ロボットの向きを修正
+        // URDFの座標系とThree.jsの座標系の違いを補正
+        robot.rotation.x = -Math.PI / 2;
+        robot.rotation.y = 0;
+        robot.rotation.z = 0;  // Z軸を-90度回転
+
         // ロボットをシーンに追加
         scene.add(robot);
 
@@ -222,14 +228,17 @@ function extractJoints() {
 
 // UI設定
 function setupUI() {
-  // Joint sliders - 主要な3関節のみUI表示
-  const mainJoints = [
-    { index: 0, name: 'shoulder_pan', label: 'Joint 1 (Pan)' },
-    { index: 1, name: 'shoulder_lift', label: 'Joint 2 (Lift)' },
-    { index: 2, name: 'elbow_flex', label: 'Joint 3 (Elbow)' }
+  // 全6軸のジョイント
+  const allJoints = [
+    { index: 0, name: 'shoulder_pan', label: 'Shoulder Pan' },
+    { index: 1, name: 'shoulder_lift', label: 'Shoulder Lift' },
+    { index: 2, name: 'elbow_flex', label: 'Elbow Flex' },
+    { index: 3, name: 'wrist_flex', label: 'Wrist Flex' },
+    { index: 4, name: 'wrist_roll', label: 'Wrist Roll' },
+    { index: 5, name: 'gripper', label: 'Gripper' }
   ];
 
-  mainJoints.forEach(({ index }, uiIndex) => {
+  allJoints.forEach(({ index }, uiIndex) => {
     const sliderNum = uiIndex + 1;
     const slider = document.getElementById(`joint${sliderNum}`);
     const valueDisplay = document.getElementById(`joint${sliderNum}-value`);
@@ -248,7 +257,7 @@ function setupUI() {
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       targetAngles = [0, 0, 0, 0, 0, 0];
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 6; i++) {
         const slider = document.getElementById(`joint${i}`);
         const valueDisplay = document.getElementById(`joint${i}-value`);
         if (slider && valueDisplay) {

@@ -153,21 +153,39 @@
         <h2>🤖 SO-ARM Control</h2>
         <div class="control-group">
           <label>
-            Joint 1: <span class="value-display" id="joint1-value">0°</span>
+            Shoulder Pan: <span class="value-display" id="joint1-value">0°</span>
           </label>
-          <input type="range" id="joint1" min="-180" max="180" value="0" step="1">
+          <input type="range" id="joint1" min="-110" max="110" value="0" step="1">
         </div>
         <div class="control-group">
           <label>
-            Joint 2: <span class="value-display" id="joint2-value">0°</span>
+            Shoulder Lift: <span class="value-display" id="joint2-value">0°</span>
           </label>
-          <input type="range" id="joint2" min="-180" max="180" value="0" step="1">
+          <input type="range" id="joint2" min="-100" max="100" value="0" step="1">
         </div>
         <div class="control-group">
           <label>
-            Joint 3: <span class="value-display" id="joint3-value">0°</span>
+            Elbow Flex: <span class="value-display" id="joint3-value">0°</span>
           </label>
-          <input type="range" id="joint3" min="-180" max="180" value="0" step="1">
+          <input type="range" id="joint3" min="-95" max="95" value="0" step="1">
+        </div>
+        <div class="control-group">
+          <label>
+            Wrist Flex: <span class="value-display" id="joint4-value">0°</span>
+          </label>
+          <input type="range" id="joint4" min="-95" max="95" value="0" step="1">
+        </div>
+        <div class="control-group">
+          <label>
+            Wrist Roll: <span class="value-display" id="joint5-value">0°</span>
+          </label>
+          <input type="range" id="joint5" min="-157" max="163" value="0" step="1">
+        </div>
+        <div class="control-group">
+          <label>
+            Gripper: <span class="value-display" id="joint6-value">0°</span>
+          </label>
+          <input type="range" id="joint6" min="-10" max="100" value="0" step="1">
         </div>
         <button id="reset">Reset Position</button>
       </div>
