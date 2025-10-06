@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SO-ARM Web Physics Simulation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #canvas-container {
+      flex: 1;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      min-width: 250px;
+      z-index: 100;
+    }
+    #controls h2 {
+      margin-bottom: 15px;
+      color: #1e3c72;
+      font-size: 18px;
+    }
+    .control-group {
+      margin-bottom: 15px;
+    }
+    .control-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #333;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .control-group input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .control-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1e3c72;
+      cursor: pointer;
+    }
+    .control-group input[type="range"]::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #1e3c72;
+      cursor: pointer;
+      border: none;
+    }
+    .control-group .value-display {
+      display: inline-block;
+      margin-left: 10px;
+      color: #666;
+      font-size: 13px;
+    }
+    button {
+      background: #1e3c72;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #2a5298;
+    }
+    #status {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 30px 50px;
+      border-radius: 10px;
+      text-align: center;
+      z-index: 1000;
+    }
+    #loading.hidden {
+      display: none;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #1e3c72;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="loading">
+      <div class="spinner"></div>
+      <div>シミュレーション初期化中...</div>
+    </div>
+    <div id="canvas-container">
+      <div id="controls">
+        <h2>🤖 SO-ARM Control</h2>
+        <div class="control-group">
+          <label>
+            Joint 1: <span class="value-display" id="joint1-value">0°</span>
+          </label>
+          <input type="range" id="joint1" min="-180" max="180" value="0" step="1">
+        </div>
+        <div class="control-group">
+          <label>
+            Joint 2: <span class="value-display" id="joint2-value">0°</span>
+          </label>
+          <input type="range" id="joint2" min="-180" max="180" value="0" step="1">
+        </div>
+        <div class="control-group">
+          <label>
+            Joint 3: <span class="value-display" id="joint3-value">0°</span>
+          </label>
+          <input type="range" id="joint3" min="-180" max="180" value="0" step="1">
+        </div>
+        <button id="reset">Reset Position</button>
+      </div>
+      <div id="status">
+        FPS: <span id="fps">0</span> | Physics: OK
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
