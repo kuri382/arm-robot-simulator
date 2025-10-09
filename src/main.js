@@ -508,6 +508,18 @@ function setupUI() {
     });
   }
 
+  // Reset Blocks button
+  const resetBlocksBtn = document.getElementById('reset-blocks');
+  if (resetBlocksBtn) {
+    resetBlocksBtn.addEventListener('click', () => {
+      resetBlocks();
+      // グリップを解放
+      if (grippedBlock) {
+        releaseGrip();
+      }
+    });
+  }
+
   // Reset All button
   const resetAllBtn = document.getElementById('reset-all');
   if (resetAllBtn) {
@@ -895,8 +907,14 @@ function runProgram() {
   programMode = true;
   programCurrentStep = 0;
   programStepStartTime = Date.now();
+  programStepInitialized = false; // 初期化フラグをリセット
 
-  console.log('Starting program with', programSequence.length, 'steps');
+  // 高速実行モードに切り替え
+  Kp = Kp_FAST;
+  Kd = Kd_FAST;
+
+  console.log('Starting program with', programSequence.length, 'steps (Fast mode)');
+  console.log('Auto Grip:', autoGripEnabled ? 'ENABLED' : 'DISABLED');
 
   // UI更新
   const runBtn = document.getElementById('run-program-btn');
@@ -915,6 +933,10 @@ function stopProgram() {
   programMode = false;
   programCurrentStep = 0;
   programStepStartTime = 0;
+
+  // 通常速度に戻す
+  Kp = Kp_NORMAL;
+  Kd = Kd_NORMAL;
 
   console.log('Program stopped');
 
@@ -1000,11 +1022,11 @@ function toggleProgramPanel() {
 }
 
 // プログラムステップを更新
+let programStepInitialized = false;
+
 function updateProgramExecution() {
   if (!programMode || programSequence.length === 0) return;
 
-  const currentTime = Date.now();
-  const elapsedTime = currentTime - programStepStartTime;
   const currentStep = programSequence[programCurrentStep];
 
   if (!currentStep) {
@@ -1020,30 +1042,51 @@ function updateProgramExecution() {
     currentStepDisplay.textContent = `${programCurrentStep + 1} / ${programSequence.length}`;
   }
 
-  // ステップの時間が経過したら次のステップへ
-  if (elapsedTime >= currentStep.duration) {
+  const currentTime = Date.now();
+  const elapsedTime = currentTime - programStepStartTime;
+
+  // 初回実行時に目標角度を設定
+  if (!programStepInitialized) {
+    currentStep.angles.forEach((angle, index) => {
+      targetAngles[index] = angle * Math.PI / 180;
+    });
+    console.log('Step', programCurrentStep + 1, 'started:', currentStep.angles);
+    programStepInitialized = true;
+  }
+
+  // 全ジョイントが目標角度に到達したかチェック
+  let allJointsReached = true;
+  const ANGLE_THRESHOLD = 0.05; // 約3度の許容誤差
+
+  currentStep.angles.forEach((targetAngleDeg, index) => {
+    const targetAngleRad = targetAngleDeg * Math.PI / 180;
+    const currentAngle = joints[index]?.joint?.angle || 0;
+    const angleDiff = Math.abs(targetAngleRad - currentAngle);
+
+    if (angleDiff > ANGLE_THRESHOLD) {
+      allJointsReached = false;
+    }
+  });
+
+  // 最小実行時間も考慮（最低500ms待つ）
+  const minDuration = Math.min(500, currentStep.duration);
+  const hasMinTimePassed = elapsedTime >= minDuration;
+
+  // 全ジョイント到達 AND 最小時間経過で次へ（タイムアウトは無効）
+  const shouldMoveNext = allJointsReached && hasMinTimePassed;
+
+  if (shouldMoveNext) {
     programCurrentStep++;
     programStepStartTime = currentTime;
+    programStepInitialized = false; // 次のステップ用にリセット
 
-    // 次のステップがある場合は角度を設定
+    // 次のステップがある場合
     if (programCurrentStep < programSequence.length) {
-      const nextStep = programSequence[programCurrentStep];
-      nextStep.angles.forEach((angle, index) => {
-        targetAngles[index] = angle * Math.PI / 180;
-      });
-
-      console.log('Moving to step', programCurrentStep + 1, ':', nextStep.angles);
+      console.log('Step', programCurrentStep, 'completed. Moving to next step.');
     } else {
       // プログラム終了
       stopProgram();
       console.log('Program completed');
-    }
-  } else {
-    // 現在のステップの角度を設定（最初のフレームで実行）
-    if (elapsedTime === 0 || elapsedTime < 16) {
-      currentStep.angles.forEach((angle, index) => {
-        targetAngles[index] = angle * Math.PI / 180;
-      });
     }
   }
 }
@@ -1102,8 +1145,12 @@ function createConfetti() {
 
 // 物理/制御ステップ
 const dt = 1 / 60; // 60Hz update rate
-const Kp = 0.5;    // 比例ゲイン
-const Kd = 0.1;    // 微分ゲイン
+let Kp = 0.5;      // 比例ゲイン（プログラム実行時は高速化）
+let Kd = 0.1;      // 微分ゲイン（プログラム実行時は高速化）
+const Kp_NORMAL = 0.5;
+const Kd_NORMAL = 0.1;
+const Kp_FAST = 3.0;   // 高速実行時の比例ゲイン
+const Kd_FAST = 0.5;   // 高速実行時の微分ゲイン
 
 function updateRobot() {
   if (!robot || joints.length === 0) return;
@@ -1179,7 +1226,7 @@ function updateGripping() {
     return;
   }
 
-  // URDFローダーのジョイント角度を取得
+  // URDFローダーのジョイント角度を取得（プログラムモードでも手動でも同じtargetAnglesを使用）
   const currentAngle = targetAngles[5]; // グリッパーは6番目（インデックス5）
 
   // デバッグ用：角度をログ出力（コメントアウトして軽量化）
