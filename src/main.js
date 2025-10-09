@@ -14,6 +14,13 @@ let jointNames = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', '
 // 積み木用
 let blocks = [];
 
+// 台（プラットフォーム）
+let platform = null;
+
+// スコア管理
+let score = 0;
+let blocksOnPlatform = new Set(); // 台の上にある積み木のIDを記録
+
 // ロボットリンクの物理ボディ
 let robotBodies = new Map();
 
@@ -121,6 +128,9 @@ async function init() {
 
   // URDFロード
   await loadRobot();
+
+  // 台を作成
+  createPlatform();
 
   // 積み木を作成
   createBlocks();
@@ -245,6 +255,56 @@ function extractJoints() {
   });
 
   console.log('Extracted joints:', joints.map(j => j.name));
+}
+
+// 台（プラットフォーム）を作成
+function createPlatform() {
+  const platformSize = { width: 0.15, height: 0.05, depth: 0.15 };
+  const platformPosition = { x: 0.1, y: platformSize.height / 2, z: 0.3 };
+
+  // ビジュアル（Three.js）
+  const geometry = new THREE.BoxGeometry(platformSize.width, platformSize.height, platformSize.depth);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x44aa88,
+    roughness: 0.7,
+    metalness: 0.3
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.set(platformPosition.x, platformPosition.y, platformPosition.z);
+  scene.add(mesh);
+
+  // 物理ボディ（静的）
+  const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+    .setTranslation(platformPosition.x, platformPosition.y, platformPosition.z);
+  const rigidBody = world.createRigidBody(rigidBodyDesc);
+
+  // コライダー（当たり判定）
+  const halfWidth = platformSize.width / 2;
+  const halfHeight = platformSize.height / 2;
+  const halfDepth = platformSize.depth / 2;
+  const colliderDesc = RAPIER.ColliderDesc.cuboid(halfWidth, halfHeight, halfDepth)
+    .setFriction(1.5)
+    .setRestitution(0.1);
+  world.createCollider(colliderDesc, rigidBody);
+
+  platform = {
+    mesh: mesh,
+    body: rigidBody,
+    size: platformSize,
+    position: platformPosition,
+    bounds: {
+      minX: platformPosition.x - halfWidth,
+      maxX: platformPosition.x + halfWidth,
+      minY: platformPosition.y + halfHeight, // 台の上面
+      maxY: platformPosition.y + halfHeight + 0.1, // 上面から少し上まで
+      minZ: platformPosition.z - halfDepth,
+      maxZ: platformPosition.z + halfDepth
+    }
+  };
+
+  console.log('Platform created at', platformPosition);
 }
 
 // 積み木を作成
@@ -739,6 +799,54 @@ function updateRobotColliders() {
   });
 }
 
+// スコア更新
+function updateScore() {
+  if (!platform) return;
+
+  let newScore = 0;
+  const newBlocksOnPlatform = new Set();
+
+  blocks.forEach(block => {
+    const pos = block.body.translation();
+    const vel = block.body.linvel();
+
+    // 積み木が台の範囲内にあるかチェック
+    const isOnPlatform =
+      pos.x >= platform.bounds.minX &&
+      pos.x <= platform.bounds.maxX &&
+      pos.y >= platform.bounds.minY &&
+      pos.y <= platform.bounds.maxY &&
+      pos.z >= platform.bounds.minZ &&
+      pos.z <= platform.bounds.maxZ;
+
+    // 速度が小さい（静止している）かチェック
+    const isStable = Math.abs(vel.x) < 0.01 && Math.abs(vel.y) < 0.01 && Math.abs(vel.z) < 0.01;
+
+    if (isOnPlatform && isStable) {
+      newBlocksOnPlatform.add(block.id);
+
+      // 新しく台に乗った積み木の場合、スコアを加算
+      if (!blocksOnPlatform.has(block.id)) {
+        console.log(`Block ${block.id} placed on platform! +10 points`);
+      }
+    }
+  });
+
+  // スコアを計算（台の上にある積み木の数 × 10点）
+  newScore = newBlocksOnPlatform.size * 10;
+
+  // スコアが変わった場合のみ更新
+  if (newScore !== score) {
+    score = newScore;
+    const scoreDisplay = document.getElementById('score');
+    if (scoreDisplay) {
+      scoreDisplay.textContent = score;
+    }
+  }
+
+  blocksOnPlatform = newBlocksOnPlatform;
+}
+
 // アニメーションループ
 function animate() {
   requestAnimationFrame(animate);
@@ -792,6 +900,9 @@ function animate() {
     block.mesh.position.set(pos.x, pos.y, pos.z);
     block.mesh.quaternion.set(rot.x, rot.y, rot.z, rot.w);
   });
+
+  // スコア更新
+  updateScore();
 
   controls.update();
   renderer.render(scene, camera);
