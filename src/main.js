@@ -27,6 +27,12 @@ let gameStartTime = 0; // ゲーム開始時刻
 let gameTimeLimit = 120; // ゲーム時間（秒）
 let gameScore = 0; // ゲーム中のスコア
 
+// プログラミングモード管理
+let programMode = false; // プログラムモード実行中かどうか
+let programSequence = []; // プログラムシーケンス（各要素は {angles: [...], duration: ms}）
+let programCurrentStep = 0; // 現在実行中のステップ
+let programStepStartTime = 0; // 現在のステップの開始時刻
+
 // ロボットリンクの物理ボディ
 let robotBodies = new Map();
 
@@ -47,7 +53,7 @@ const GRIP_DISTANCE = 0.1;  // グリッパーから積み木までの最大距�
 const USE_KINEMATIC_GRIP = true; // キネマティック制御を使用（振動を防ぐ）
 
 // FPSカウンター
-let lastTime = performance.now();
+let lastFPSUpdate = performance.now();
 let frameCount = 0;
 
 // 初期化
@@ -56,10 +62,10 @@ async function init() {
   await RAPIER.init();
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 
-  // 物理エンジンの精度設定
-  world.timestep = 1 / 120;
-  world.maxVelocityIterations = 8;
-  world.maxPositionIterations = 4;
+  // 物理エンジンの精度設定（最適化）
+  world.timestep = 1 / 60; // 60Hzに変更（120Hzから削減）
+  world.maxVelocityIterations = 4; // 8から4に削減
+  world.maxPositionIterations = 2; // 4から2に削減
 
   // Three.js基本セットアップ
   scene = new THREE.Scene();
@@ -103,8 +109,8 @@ async function init() {
   directionalLight.shadow.camera.right = 0.5;
   directionalLight.shadow.camera.top = 0.5;
   directionalLight.shadow.camera.bottom = -0.5;
-  directionalLight.shadow.mapSize.width = 2048;
-  directionalLight.shadow.mapSize.height = 2048;
+  directionalLight.shadow.mapSize.width = 1024; // 2048から削減
+  directionalLight.shadow.mapSize.height = 1024; // 2048から削減
   scene.add(directionalLight);
 
   const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x545454, 0.4);
@@ -193,11 +199,20 @@ async function loadRobot() {
         // ロボットをシーンに追加
         scene.add(robot);
 
-        // シャドウを有効化
+        // シャドウを有効化（軽量化：一部のみ）
         robot.traverse((child) => {
           if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
+            // 主要パーツのみシャドウを有効化（軽量化）
+            const importantParts = ['gripper', 'lower_arm', 'upper_arm'];
+            const isImportant = importantParts.some(part => child.name.includes(part));
+
+            if (isImportant) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            } else {
+              child.castShadow = false;
+              child.receiveShadow = false;
+            }
 
             // マテリアルの調整
             if (child.material) {
@@ -493,6 +508,12 @@ function setupUI() {
     });
   }
 
+  // Reset All button
+  const resetAllBtn = document.getElementById('reset-all');
+  if (resetAllBtn) {
+    resetAllBtn.addEventListener('click', resetAll);
+  }
+
   // Auto Grip toggle button
   const toggleGripBtn = document.getElementById('toggle-grip');
   if (toggleGripBtn) {
@@ -526,6 +547,49 @@ function setupUI() {
       document.getElementById('game-result').classList.remove('show');
       startGame();
     });
+  }
+
+  // Teaching button（現在の角度を取得）
+  const teachBtn = document.getElementById('teach-btn');
+  if (teachBtn) {
+    teachBtn.addEventListener('click', captureCurrentAngles);
+  }
+
+  // Set Angles button（配列から角度を設定）
+  const setAnglesBtn = document.getElementById('set-angles-btn');
+  if (setAnglesBtn) {
+    setAnglesBtn.addEventListener('click', setAnglesFromArray);
+  }
+
+  // Add Step button（プログラムにステップを追加）
+  const addStepBtn = document.getElementById('add-step-btn');
+  if (addStepBtn) {
+    addStepBtn.addEventListener('click', addProgramStep);
+  }
+
+  // Run Program button（プログラムを実行）
+  const runProgramBtn = document.getElementById('run-program-btn');
+  if (runProgramBtn) {
+    runProgramBtn.addEventListener('click', runProgram);
+  }
+
+  // Stop Program button（プログラムを停止）
+  const stopProgramBtn = document.getElementById('stop-program-btn');
+  if (stopProgramBtn) {
+    stopProgramBtn.addEventListener('click', stopProgram);
+  }
+
+  // Clear Program button（プログラムをクリア）
+  const clearProgramBtn = document.getElementById('clear-program-btn');
+  if (clearProgramBtn) {
+    clearProgramBtn.addEventListener('click', clearProgram);
+  }
+
+  // Toggle Program Panel（パネルの折りたたみ）
+  const programPanelHeader = document.getElementById('program-panel-header');
+
+  if (programPanelHeader) {
+    programPanelHeader.addEventListener('click', toggleProgramPanel);
   }
 }
 
@@ -624,7 +688,7 @@ function endGame() {
     title = '😢 Time\'s Up!';
     message = 'Keep practicing! You can do it!';
   } else if (gameScore <= 10) {
-    title = '👍 Not Bad!';
+    title = '👍 Well Done!';
     message = 'Good start! Try to place more blocks!';
   } else if (gameScore <= 20) {
     title = '😊 Good Job!';
@@ -637,7 +701,7 @@ function endGame() {
     message = 'You\'re a pro at this!';
   } else {
     title = '🏆 Perfect Score!';
-    message = 'Incredible! You placed all blocks!';
+    message = 'Incredible! You placed many many blocks!';
   }
 
   // 最終スコアとメッセージを表示
@@ -695,6 +759,292 @@ function updateGameUI() {
     }
   } else if (gameTimerEl) {
     gameTimerEl.textContent = '1:00';
+  }
+}
+
+// ティーチング：現在の角度を取得
+function captureCurrentAngles() {
+  // 現在の目標角度を度数に変換して取得
+  const currentAngles = targetAngles.map(angle => Math.round(angle * 180 / Math.PI));
+
+  // テキストエリアに表示
+  const anglesInput = document.getElementById('angles-input');
+  if (anglesInput) {
+    anglesInput.value = JSON.stringify(currentAngles);
+  }
+
+  console.log('Captured angles:', currentAngles);
+}
+
+// 配列から角度を設定
+function setAnglesFromArray() {
+  const anglesInput = document.getElementById('angles-input');
+  if (!anglesInput) return;
+
+  try {
+    const angles = JSON.parse(anglesInput.value);
+
+    if (!Array.isArray(angles) || angles.length !== 6) {
+      alert('Error: Array must contain exactly 6 values');
+      return;
+    }
+
+    // 各ジョイントに角度を設定
+    angles.forEach((angle, index) => {
+      targetAngles[index] = angle * Math.PI / 180;
+
+      // UIスライダーも更新
+      const slider = document.getElementById(`joint${index + 1}`);
+      const valueDisplay = document.getElementById(`joint${index + 1}-value`);
+      if (slider && valueDisplay) {
+        slider.value = angle;
+        valueDisplay.textContent = `${angle}°`;
+      }
+    });
+
+    console.log('Set angles from array:', angles);
+  } catch (error) {
+    alert('Error: Invalid JSON format. Expected: [deg1, deg2, deg3, deg4, deg5, deg6]');
+    console.error('Parse error:', error);
+  }
+}
+
+// プログラムにステップを追加
+function addProgramStep() {
+  const anglesInput = document.getElementById('angles-input');
+  const durationInput = document.getElementById('step-duration');
+
+  if (!anglesInput || !durationInput) return;
+
+  try {
+    const angles = JSON.parse(anglesInput.value);
+    const duration = parseInt(durationInput.value);
+
+    if (!Array.isArray(angles) || angles.length !== 6) {
+      alert('Error: Array must contain exactly 6 values');
+      return;
+    }
+
+    if (isNaN(duration) || duration <= 0) {
+      alert('Error: Duration must be a positive number');
+      return;
+    }
+
+    // プログラムシーケンスに追加
+    programSequence.push({
+      angles: angles,
+      duration: duration
+    });
+
+    // プログラムリストを更新
+    updateProgramList();
+
+    console.log('Added step to program:', { angles, duration });
+  } catch (error) {
+    alert('Error: Invalid JSON format. Expected: [deg1, deg2, deg3, deg4, deg5, deg6]');
+    console.error('Parse error:', error);
+  }
+}
+
+// プログラムリストを更新
+function updateProgramList() {
+  const programList = document.getElementById('program-list');
+  if (!programList) return;
+
+  programList.innerHTML = '';
+
+  programSequence.forEach((step, index) => {
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'program-step';
+    stepDiv.innerHTML = `
+      <span class="step-number">${index + 1}.</span>
+      <span class="step-angles">${JSON.stringify(step.angles)}</span>
+      <span class="step-duration">${step.duration}ms</span>
+      <button class="remove-step-btn" data-index="${index}">Remove</button>
+    `;
+
+    // Remove buttonのイベントリスナー
+    const removeBtn = stepDiv.querySelector('.remove-step-btn');
+    removeBtn.addEventListener('click', () => {
+      programSequence.splice(index, 1);
+      updateProgramList();
+    });
+
+    programList.appendChild(stepDiv);
+  });
+
+  // ステップ数を表示
+  const stepCountDisplay = document.getElementById('step-count');
+  if (stepCountDisplay) {
+    stepCountDisplay.textContent = programSequence.length;
+  }
+}
+
+// プログラムを実行
+function runProgram() {
+  if (programSequence.length === 0) {
+    alert('Error: Program is empty. Add steps first.');
+    return;
+  }
+
+  if (programMode) {
+    alert('Program is already running');
+    return;
+  }
+
+  programMode = true;
+  programCurrentStep = 0;
+  programStepStartTime = Date.now();
+
+  console.log('Starting program with', programSequence.length, 'steps');
+
+  // UI更新
+  const runBtn = document.getElementById('run-program-btn');
+  if (runBtn) {
+    runBtn.disabled = true;
+  }
+
+  const stopBtn = document.getElementById('stop-program-btn');
+  if (stopBtn) {
+    stopBtn.disabled = false;
+  }
+}
+
+// プログラムを停止
+function stopProgram() {
+  programMode = false;
+  programCurrentStep = 0;
+  programStepStartTime = 0;
+
+  console.log('Program stopped');
+
+  // UI更新
+  const runBtn = document.getElementById('run-program-btn');
+  if (runBtn) {
+    runBtn.disabled = false;
+  }
+
+  const stopBtn = document.getElementById('stop-program-btn');
+  if (stopBtn) {
+    stopBtn.disabled = true;
+  }
+
+  // 現在のステップ表示をクリア
+  const currentStepDisplay = document.getElementById('current-step');
+  if (currentStepDisplay) {
+    currentStepDisplay.textContent = '-';
+  }
+}
+
+// 全てをリセット
+function resetAll() {
+  const confirmed = confirm('Reset everything? This will:\n- Reset robot position\n- Reset blocks\n- Clear program\n- Release grip\n\nAre you sure?');
+
+  if (!confirmed) return;
+
+  // プログラムを停止してクリア
+  if (programMode) {
+    stopProgram();
+  }
+  programSequence = [];
+  updateProgramList();
+
+  // ロボットをリセット
+  resetRobot();
+
+  // 積み木をリセット
+  resetBlocks();
+
+  // グリップを解放
+  if (grippedBlock) {
+    releaseGrip();
+  }
+
+  // Angle Array inputもリセット
+  const anglesInput = document.getElementById('angles-input');
+  if (anglesInput) {
+    anglesInput.value = '[0, 0, 0, 0, 0, 0]';
+  }
+
+  console.log('All reset completed');
+}
+
+// プログラムをクリア
+function clearProgram() {
+  if (programMode) {
+    const confirmed = confirm('Program is running. Stop and clear?\n\nWarning: This will delete all taught positions!');
+    if (!confirmed) {
+      return;
+    }
+    stopProgram();
+  } else {
+    const confirmed = confirm('Clear all program steps?\n\nWarning: This will delete all taught positions!');
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  programSequence = [];
+  updateProgramList();
+
+  console.log('Program cleared');
+}
+
+// Programming Panelの折りたたみ切り替え
+function toggleProgramPanel() {
+  const panel = document.getElementById('program-panel');
+
+  if (!panel) return;
+
+  panel.classList.toggle('collapsed');
+}
+
+// プログラムステップを更新
+function updateProgramExecution() {
+  if (!programMode || programSequence.length === 0) return;
+
+  const currentTime = Date.now();
+  const elapsedTime = currentTime - programStepStartTime;
+  const currentStep = programSequence[programCurrentStep];
+
+  if (!currentStep) {
+    // プログラム終了
+    stopProgram();
+    console.log('Program completed');
+    return;
+  }
+
+  // 現在のステップ表示を更新
+  const currentStepDisplay = document.getElementById('current-step');
+  if (currentStepDisplay) {
+    currentStepDisplay.textContent = `${programCurrentStep + 1} / ${programSequence.length}`;
+  }
+
+  // ステップの時間が経過したら次のステップへ
+  if (elapsedTime >= currentStep.duration) {
+    programCurrentStep++;
+    programStepStartTime = currentTime;
+
+    // 次のステップがある場合は角度を設定
+    if (programCurrentStep < programSequence.length) {
+      const nextStep = programSequence[programCurrentStep];
+      nextStep.angles.forEach((angle, index) => {
+        targetAngles[index] = angle * Math.PI / 180;
+      });
+
+      console.log('Moving to step', programCurrentStep + 1, ':', nextStep.angles);
+    } else {
+      // プログラム終了
+      stopProgram();
+      console.log('Program completed');
+    }
+  } else {
+    // 現在のステップの角度を設定（最初のフレームで実行）
+    if (elapsedTime === 0 || elapsedTime < 16) {
+      currentStep.angles.forEach((angle, index) => {
+        targetAngles[index] = angle * Math.PI / 180;
+      });
+    }
   }
 }
 
@@ -832,12 +1182,12 @@ function updateGripping() {
   // URDFローダーのジョイント角度を取得
   const currentAngle = targetAngles[5]; // グリッパーは6番目（インデックス5）
 
-  // デバッグ用：角度をログ出力（最初の数回のみ）
-  if (Math.random() < 0.01) {
-    console.log('Gripper angle:', (currentAngle * 180 / Math.PI).toFixed(2), '°',
-                'Grip threshold:', (GRIP_THRESHOLD * 180 / Math.PI).toFixed(2), '°',
-                'Release threshold:', (RELEASE_THRESHOLD * 180 / Math.PI).toFixed(2), '°');
-  }
+  // デバッグ用：角度をログ出力（コメントアウトして軽量化）
+  // if (Math.random() < 0.01) {
+  //   console.log('Gripper angle:', (currentAngle * 180 / Math.PI).toFixed(2), '°',
+  //               'Grip threshold:', (GRIP_THRESHOLD * 180 / Math.PI).toFixed(2), '°',
+  //               'Release threshold:', (RELEASE_THRESHOLD * 180 / Math.PI).toFixed(2), '°');
+  // }
 
   // グリッパーが閉じた（角度が閾値を下回った）- 小さい角度 = 閉じている
   if (currentAngle < GRIP_THRESHOLD && previousGripperAngle >= GRIP_THRESHOLD) {
@@ -1102,6 +1452,11 @@ function updateScore() {
 function animate() {
   requestAnimationFrame(animate);
 
+  // プログラム実行中の処理
+  if (programMode) {
+    updateProgramExecution();
+  }
+
   // ロボット更新（キネマティクス）
   updateRobot();
 
@@ -1111,7 +1466,7 @@ function animate() {
   // ロボットのコライダー位置を更新
   updateRobotColliders();
 
-  // 物理ステップ
+  // 物理ステップ（毎フレーム実行）
   world.step();
 
   // 掴んでいる積み木の位置を更新（キネマティック制御）
@@ -1161,13 +1516,13 @@ function animate() {
   // FPS表示
   frameCount++;
   const currentTime = performance.now();
-  if (currentTime >= lastTime + 1000) {
+  if (currentTime >= lastFPSUpdate + 1000) {
     const fpsDisplay = document.getElementById('fps');
     if (fpsDisplay) {
       fpsDisplay.textContent = frameCount;
     }
     frameCount = 0;
-    lastTime = currentTime;
+    lastFPSUpdate = currentTime;
   }
 }
 
