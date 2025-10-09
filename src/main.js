@@ -21,6 +21,12 @@ let platform = null;
 let score = 0;
 let blocksOnPlatform = new Set(); // 台の上にある積み木のIDを記録
 
+// ゲームモード管理
+let gameMode = false; // ゲーム中かどうか
+let gameStartTime = 0; // ゲーム開始時刻
+let gameTimeLimit = 120; // ゲーム時間（秒）
+let gameScore = 0; // ゲーム中のスコア
+
 // ロボットリンクの物理ボディ
 let robotBodies = new Map();
 
@@ -259,13 +265,13 @@ function extractJoints() {
 
 // 台（プラットフォーム）を作成
 function createPlatform() {
-  const platformSize = { width: 0.15, height: 0.05, depth: 0.15 };
+  const platformSize = { width: 0.15, height: 0.03, depth: 0.15 };
   const platformPosition = { x: 0.1, y: platformSize.height / 2, z: 0.3 };
 
   // ビジュアル（Three.js）
   const geometry = new THREE.BoxGeometry(platformSize.width, platformSize.height, platformSize.depth);
   const material = new THREE.MeshStandardMaterial({
-    color: 0x44aa88,
+    color: 0xb4b4b4,
     roughness: 0.7,
     metalness: 0.3
   });
@@ -298,7 +304,7 @@ function createPlatform() {
       minX: platformPosition.x - halfWidth,
       maxX: platformPosition.x + halfWidth,
       minY: platformPosition.y + halfHeight, // 台の上面
-      maxY: platformPosition.y + halfHeight + 0.1, // 上面から少し上まで
+      maxY: platformPosition.y + halfHeight + 0.05, // 上面から0.05mまで
       minZ: platformPosition.z - halfDepth,
       maxZ: platformPosition.z + halfDepth
     }
@@ -507,6 +513,241 @@ function setupUI() {
       }
     });
   }
+
+  // Game Mode ボタン
+  const startGameBtn = document.getElementById('start-game');
+  if (startGameBtn) {
+    startGameBtn.addEventListener('click', startGame);
+  }
+
+  const playAgainBtn = document.getElementById('play-again');
+  if (playAgainBtn) {
+    playAgainBtn.addEventListener('click', () => {
+      document.getElementById('game-result').classList.remove('show');
+      startGame();
+    });
+  }
+}
+
+// ゲーム開始
+function startGame() {
+  gameMode = true;
+  gameStartTime = Date.now();
+  gameScore = 0;
+  blocksOnPlatform.clear();
+
+  // ロボットをリセット
+  resetRobot();
+
+  // 積み木をリセット
+  resetBlocks();
+
+  // グリップ状態をリセット
+  if (grippedBlock) {
+    releaseGrip();
+  }
+
+  // UIを更新
+  const startBtn = document.getElementById('start-game');
+  if (startBtn) {
+    startBtn.textContent = 'Game Running...';
+    startBtn.disabled = true;
+  }
+
+  // スコアをリセット
+  updateGameUI();
+
+  console.log('Game started!');
+}
+
+// ロボットをリセット
+function resetRobot() {
+  // ジョイント角度をリセット
+  targetAngles = [0, 0, 0, 0, 0, 0];
+
+  joints.forEach(({ joint }) => {
+    if (joint.jointType === 'revolute' || joint.jointType === 'continuous') {
+      joint.setJointValue(0);
+    }
+  });
+
+  // UIスライダーをリセット
+  for (let i = 1; i <= 6; i++) {
+    const slider = document.getElementById(`joint${i}`);
+    const valueDisplay = document.getElementById(`joint${i}-value`);
+    if (slider && valueDisplay) {
+      slider.value = 0;
+      valueDisplay.textContent = '0°';
+    }
+  }
+
+  console.log('Robot reset to initial position');
+}
+
+// 積み木をリセット
+function resetBlocks() {
+  const initialPositions = [
+    { x: 0.35, y: 0.0225, z: 0 },
+    { x: 0.25, y: 0.0375, z: -0.1 },
+    { x: 0.28, y: 0.0125, z: 0 },
+    { x: 0.22, y: 0.015, z: 0.05 }
+  ];
+
+  blocks.forEach((block, index) => {
+    if (initialPositions[index]) {
+      const pos = initialPositions[index];
+
+      // 物理ボディの位置と速度をリセット
+      block.body.setTranslation({ x: pos.x, y: pos.y, z: pos.z }, true);
+      block.body.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
+      block.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      block.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+
+      // ビジュアルメッシュの位置をリセット
+      block.mesh.position.set(pos.x, pos.y, pos.z);
+      block.mesh.quaternion.set(0, 0, 0, 1);
+    }
+  });
+
+  console.log('Blocks reset to initial positions');
+}
+
+// ゲーム終了
+function endGame() {
+  gameMode = false;
+
+  // スコアに応じたメッセージを決定
+  let message = '';
+  let title = '';
+
+  if (gameScore === 0) {
+    title = '😢 Time\'s Up!';
+    message = 'Keep practicing! You can do it!';
+  } else if (gameScore <= 10) {
+    title = '👍 Not Bad!';
+    message = 'Good start! Try to place more blocks!';
+  } else if (gameScore <= 20) {
+    title = '😊 Good Job!';
+    message = 'You\'re getting better!';
+  } else if (gameScore <= 30) {
+    title = '🎉 Great Work!';
+    message = 'Excellent performance!';
+  } else if (gameScore <= 40) {
+    title = '🌟 Amazing!';
+    message = 'You\'re a pro at this!';
+  } else {
+    title = '🏆 Perfect Score!';
+    message = 'Incredible! You placed all blocks!';
+  }
+
+  // 最終スコアとメッセージを表示
+  const gameResult = document.getElementById('game-result');
+  const titleEl = gameResult.querySelector('h1');
+  const finalScoreEl = gameResult.querySelector('.final-score');
+  const messageEl = gameResult.querySelector('p');
+
+  if (titleEl) {
+    titleEl.textContent = title;
+  }
+  if (finalScoreEl) {
+    finalScoreEl.textContent = gameScore;
+  }
+  if (messageEl) {
+    messageEl.textContent = message;
+  }
+
+  gameResult.classList.add('show');
+
+  // スコアが0より大きい場合のみ紙吹雪エフェクト
+  if (gameScore > 0) {
+    createConfetti();
+  }
+
+  // ボタンをリセット
+  const startBtn = document.getElementById('start-game');
+  if (startBtn) {
+    startBtn.textContent = 'Start Game';
+    startBtn.disabled = false;
+  }
+
+  console.log('Game ended! Final score:', gameScore);
+}
+
+// ゲームUIを更新
+function updateGameUI() {
+  const gameScoreEl = document.getElementById('game-score');
+  const gameTimerEl = document.getElementById('game-timer');
+
+  if (gameScoreEl) {
+    gameScoreEl.textContent = gameScore;
+  }
+
+  if (gameMode && gameTimerEl) {
+    const elapsedTime = (Date.now() - gameStartTime) / 1000;
+    const remainingTime = Math.max(0, gameTimeLimit - elapsedTime);
+    const minutes = Math.floor(remainingTime / 60);
+    const seconds = Math.floor(remainingTime % 60);
+    gameTimerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    // 時間切れチェック
+    if (remainingTime <= 0 && gameMode) {
+      endGame();
+    }
+  } else if (gameTimerEl) {
+    gameTimerEl.textContent = '1:00';
+  }
+}
+
+// 紙吹雪エフェクト
+function createConfetti() {
+  const canvas = document.getElementById('confetti');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const confettiPieces = [];
+  const confettiCount = 150;
+  const colors = ['#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3', '#2ecc71', '#3498db'];
+
+  for (let i = 0; i < confettiCount; i++) {
+    confettiPieces.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      rotation: Math.random() * 360,
+      speed: Math.random() * 3 + 2,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: Math.random() * 10 + 5
+    });
+  }
+
+  function animateConfetti() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    confettiPieces.forEach(piece => {
+      ctx.save();
+      ctx.translate(piece.x, piece.y);
+      ctx.rotate(piece.rotation * Math.PI / 180);
+      ctx.fillStyle = piece.color;
+      ctx.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size);
+      ctx.restore();
+
+      piece.y += piece.speed;
+      piece.rotation += 5;
+
+      if (piece.y > canvas.height) {
+        piece.y = -20;
+        piece.x = Math.random() * canvas.width;
+      }
+    });
+
+    if (document.getElementById('game-result').classList.contains('show')) {
+      requestAnimationFrame(animateConfetti);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  animateConfetti();
 }
 
 // 物理/制御ステップ
@@ -825,9 +1066,9 @@ function updateScore() {
     if (isOnPlatform && isStable) {
       newBlocksOnPlatform.add(block.id);
 
-      // 新しく台に乗った積み木の場合、スコアを加算
-      if (!blocksOnPlatform.has(block.id)) {
-        console.log(`Block ${block.id} placed on platform! +10 points`);
+      // ゲームモード中で、新しく台に乗った積み木の場合、ログ出力
+      if (gameMode && !blocksOnPlatform.has(block.id)) {
+        console.log(`Block ${block.id} placed on platform!`);
       }
     }
   });
@@ -835,7 +1076,7 @@ function updateScore() {
   // スコアを計算（台の上にある積み木の数 × 10点）
   newScore = newBlocksOnPlatform.size * 10;
 
-  // スコアが変わった場合のみ更新
+  // 通常モードのスコアが変わった場合のみ更新
   if (newScore !== score) {
     score = newScore;
     const scoreDisplay = document.getElementById('score');
@@ -844,7 +1085,17 @@ function updateScore() {
     }
   }
 
+  // ゲームモード中はゲームスコアも更新
+  if (gameMode) {
+    gameScore = newScore;
+  }
+
   blocksOnPlatform = newBlocksOnPlatform;
+
+  // ゲームモード中のUI更新
+  if (gameMode) {
+    updateGameUI();
+  }
 }
 
 // アニメーションループ
