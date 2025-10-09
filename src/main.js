@@ -172,7 +172,7 @@ async function loadRobot() {
         // URDFの座標系とThree.jsの座標系の違いを補正
         robot.rotation.x = -Math.PI / 2;
         robot.rotation.y = 0;
-        robot.rotation.z = 0;  // Z軸を-90度回転
+        robot.rotation.z = 0;
 
         // ロボットをシーンに追加
         scene.add(robot);
