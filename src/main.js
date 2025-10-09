@@ -143,35 +143,25 @@ async function loadRobot() {
   console.log('Starting URDF load...');
 
   const loader = new URDFLoader();
+  loader.workingPath = import.meta.env.BASE_URL + 'soarm/';
 
-  // デフォルトのマネージャーを取得
-  loader.manager.onStart = function(url) {
-    console.log('Started loading:', url);
-  };
-
+  // LoadingManagerのイベント設定
   loader.manager.onLoad = function() {
-    console.log('All resources loaded');
+    console.log('LoadingManager: All resources loaded');
   };
 
   loader.manager.onProgress = function(url, itemsLoaded, itemsTotal) {
-    console.log('Loading file:', url, `(${itemsLoaded}/${itemsTotal})`);
-
-    // ローディング表示を更新
-    const loadingDiv = document.getElementById('loading');
-    if (loadingDiv && !loadingDiv.classList.contains('hidden')) {
-      const progress = Math.round((itemsLoaded / itemsTotal) * 100);
-      loadingDiv.querySelector('div:last-child').textContent =
-        `モデル読み込み中... ${itemsLoaded}/${itemsTotal} (${progress}%)`;
-    }
+    console.log('LoadingManager: Loading', url, `(${itemsLoaded}/${itemsTotal})`);
   };
 
   loader.manager.onError = function(url) {
-    console.error('Error loading:', url);
+    console.error('LoadingManager: Error loading', url);
   };
 
   return new Promise((resolve, reject) => {
     const onLoad = (urdfRobot) => {
       try {
+        console.log('onLoad callback called!');
         console.log('URDF parsed successfully!', urdfRobot);
         robot = urdfRobot;
 
@@ -217,20 +207,16 @@ async function loadRobot() {
       }
     };
 
-    const onProgress = (progress) => {
-      if (progress && progress.total > 0) {
-        const percent = (progress.loaded / progress.total * 100).toFixed(2);
-        console.log('Loading progress:', percent + '%');
-      }
-    };
-
     const onError = (error) => {
       console.error('URDF load error:', error);
       reject(error);
     };
 
+    const urdfPath = import.meta.env.BASE_URL + 'soarm/so_arm.urdf';
+    console.log('Loading URDF from:', urdfPath);
+
     try {
-      loader.load('/soarm/so_arm.urdf', onLoad, onProgress, onError);
+      loader.load(urdfPath, onLoad, undefined, onError);
     } catch (error) {
       console.error('Error calling loader.load:', error);
       reject(error);

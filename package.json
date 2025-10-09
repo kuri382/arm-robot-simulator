@@ -6,14 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
     "three": "^0.168.0",
-    "urdf-loader": "^0.12.3",
-    "@dimforge/rapier3d-compat": "^0.14.0"
+    "urdf-loader": "^0.12.3"
   },
   "devDependencies": {
+    "firebase-tools": "^14.19.1",
     "vite": "^5.4.10"
   }
 }
