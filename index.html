@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SO-ARM Web Physics Simulation</title>
+  <title>ABEJA PhysicalAI Simulator</title>
   <style>
     * {
       margin: 0;
@@ -41,8 +41,13 @@
       min-width: 250px;
       z-index: 100;
     }
+    #controls h1 {
+      margin-bottom: 10px;
+      color: #1e3c72;
+      font-size: 18px;
+    }
     #controls h2 {
-      margin-bottom: 15px;
+      margin-bottom: 10px;
       color: #1e3c72;
       font-size: 18px;
     }
@@ -51,6 +56,7 @@
     }
     .control-group label {
       display: block;
+      margin-top: 10px;
       margin-bottom: 5px;
       color: #333;
       font-size: 14px;
@@ -150,7 +156,8 @@
     </div>
     <div id="canvas-container">
       <div id="controls">
-        <h2>🤖 SO-ARM Control</h2>
+        <h1>ABEJA Platform</h1>
+        <h2>PhysicalAI Simulator</h2>
         <div class="control-group">
           <label>
             Shoulder Pan: <span class="value-display" id="joint1-value">0°</span>

@@ -102,7 +102,7 @@ async function init() {
   scene.add(gridHelper);
 
   // 地面（ビジュアル）
-  const groundGeometry = new THREE.BoxGeometry(1, 0.02, 2);
+  const groundGeometry = new THREE.BoxGeometry(2, 0.015, 2);
   const groundMaterial = new THREE.MeshStandardMaterial({
     color: 0xF0F8FF,
     roughness: 0.8,
@@ -114,7 +114,7 @@ async function init() {
   scene.add(groundMesh);
 
   // 地面（物理）
-  const groundColliderDesc = RAPIER.ColliderDesc.cuboid(1, 0.01, 1)
+  const groundColliderDesc = RAPIER.ColliderDesc.cuboid(1, 0.0, 1)
     .setFriction(1.0)       // 地面の摩擦
     .setRestitution(1.0);   // 地面の反発なし
   world.createCollider(groundColliderDesc);
