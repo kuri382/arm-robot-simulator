@@ -13,7 +13,7 @@
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       overflow: hidden;
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      background: linear-gradient(135deg, #262260 0%, #2a5298 100%);
     }
     #app {
       width: 100vw;
@@ -40,7 +40,7 @@
     }
     .panel-header {
       padding: 15px 20px;
-      background: #1e3c72;
+      background: #262260;
       color: white;
       border-radius: 10px 10px 0 0;
     }
@@ -87,14 +87,14 @@
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: #1e3c72;
+      background: #262260;
       cursor: pointer;
     }
     .control-group input[type="range"]::-moz-range-thumb {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: #1e3c72;
+      background: #262260;
       cursor: pointer;
       border: none;
     }
@@ -105,7 +105,7 @@
       font-size: 13px;
     }
     button {
-      background: #1e3c72;
+      background: #262260;
       color: white;
       border: none;
       padding: 10px 20px;
@@ -134,6 +134,20 @@
       bottom: 20px;
       left: 20px;
       width: 280px;
+      transition: transform 0.3s ease;
+    }
+    #game-panel.collapsed {
+      transform: translateY(calc(100% - 55px));
+    }
+    #game-panel.collapsed #game-panel-content {
+      display: none;
+    }
+    #game-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
     }
     #game-panel .panel-content {
       text-align: center;
@@ -146,7 +160,7 @@
     }
     #game-timer {
       font-size: 28px;
-      color: #1e3c72;
+      color: #262260;
       font-weight: 600;
       margin: 10px 0;
     }
@@ -195,8 +209,11 @@
     #program-panel.collapsed .collapse-icon {
       transform: rotate(180deg);
     }
+    #game-panel.collapsed .collapse-icon {
+      transform: rotate(180deg);
+    }
     #program-panel h3 {
-      color: #1e3c72;
+      color: #262260;
       font-size: 14px;
       margin-top: 15px;
       margin-bottom: 10px;
@@ -251,7 +268,7 @@
     }
     .step-number {
       font-weight: bold;
-      color: #1e3c72;
+      color: #262260;
       min-width: 25px;
     }
     .step-angles {
@@ -323,7 +340,7 @@
     #game-result .final-score {
       font-size: 72px;
       font-weight: bold;
-      color: #1e3c72;
+      color: #262260;
       margin: 20px 0;
     }
     #confetti {
@@ -351,7 +368,7 @@
     }
     .spinner {
       border: 4px solid #f3f3f3;
-      border-top: 4px solid #1e3c72;
+      border-top: 4px solid #262260;
       border-radius: 50%;
       width: 40px;
       height: 40px;
@@ -422,12 +439,13 @@
         FPS: <span id="fps">0</span> | Physics: OK | Grip: <span id="grip-status">None</span> | Score: <span id="score">0</span>
       </div>
       <div id="game-panel" class="panel">
-        <div class="panel-header">
+        <div id="game-panel-header" class="panel-header">
           <h2>Game Mode</h2>
+          <span class="collapse-icon">▼</span>
         </div>
-        <div class="panel-content">
+        <div id="game-panel-content" class="panel-content">
           <div id="game-score">0</div>
-          <div id="game-timer">1:00</div>
+          <div id="game-timer">2:00</div>
           <button id="start-game">Start Game</button>
         </div>
       </div>
@@ -436,7 +454,7 @@
         <h1>🎉 Game Over! 🎉</h1>
         <div class="final-score">0</div>
         <p>Amazing job!</p>
-        <button id="play-again">Play Again</button>
+        <button id="close-result">Close</button>
       </div>
       <div id="program-panel" class="panel">
         <div id="program-panel-header" class="panel-header">

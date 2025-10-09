@@ -553,11 +553,10 @@ function setupUI() {
     startGameBtn.addEventListener('click', startGame);
   }
 
-  const playAgainBtn = document.getElementById('play-again');
-  if (playAgainBtn) {
-    playAgainBtn.addEventListener('click', () => {
+  const closeResultBtn = document.getElementById('close-result');
+  if (closeResultBtn) {
+    closeResultBtn.addEventListener('click', () => {
       document.getElementById('game-result').classList.remove('show');
-      startGame();
     });
   }
 
@@ -602,6 +601,13 @@ function setupUI() {
 
   if (programPanelHeader) {
     programPanelHeader.addEventListener('click', toggleProgramPanel);
+  }
+
+  // Toggle Game Panel（ゲームパネルの折りたたみ）
+  const gamePanelHeader = document.getElementById('game-panel-header');
+
+  if (gamePanelHeader) {
+    gamePanelHeader.addEventListener('click', toggleGamePanel);
   }
 }
 
@@ -1015,6 +1021,15 @@ function clearProgram() {
 // Programming Panelの折りたたみ切り替え
 function toggleProgramPanel() {
   const panel = document.getElementById('program-panel');
+
+  if (!panel) return;
+
+  panel.classList.toggle('collapsed');
+}
+
+// Game Panelの折りたたみ切り替え
+function toggleGamePanel() {
+  const panel = document.getElementById('game-panel');
 
   if (!panel) return;
 
