@@ -63,7 +63,7 @@ async function init() {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 
   // 物理エンジンの精度設定（最適化）
-  world.timestep = 1 / 60; // 60Hzに変更（120Hzから削減）
+  world.timestep = 1 / 60;
   world.maxVelocityIterations = 4; // 8から4に削減
   world.maxPositionIterations = 2; // 4から2に削減
 
@@ -335,6 +335,10 @@ function createBlocks() {
     { size: 0.025, position: { x: 0.25, y: 0.0375, z: -0.1 }, color: 0x4ecdc4 },
     { size: 0.025, position: { x: 0.28, y: 0.0125, z: 0 }, color: 0xffe66d },
     { size: 0.03, position: { x: 0.22, y: 0.015, z: 0.05 }, color: 0x95e1d3 },
+    { size: 0.025, position: { x: 0.15, y: 0.125, z: 0 }, color: 0xff6b6b },
+    { size: 0.025, position: { x: 0.15, y: 0.25, z: -0.3 }, color: 0xff6b6b },
+    { size: 0.03, position: { x: 0.3, y: 0.25, z: -0.3 }, color: 0x95e1d3 },
+    { size: 0.03, position: { x: 0.3, y: 0.25, z: 0.2 }, color: 0xffe66d },
   ];
 
   blockConfigs.forEach((config, index) => {
@@ -672,7 +676,11 @@ function resetBlocks() {
     { x: 0.35, y: 0.0225, z: 0 },
     { x: 0.25, y: 0.0375, z: -0.1 },
     { x: 0.28, y: 0.0125, z: 0 },
-    { x: 0.22, y: 0.015, z: 0.05 }
+    { x: 0.22, y: 0.015, z: 0.05 },
+    { x: 0.15, y: 0.125, z: 0 },
+    { x: 0.15, y: 0.25, z: -0.3 },
+    { x: 0.3, y: 0.25, z: -0.3 },
+    { x: 0.3, y: 0.25, z: 0.2 }
   ];
 
   blocks.forEach((block, index) => {
@@ -1071,14 +1079,27 @@ function updateProgramExecution() {
 
   // 全ジョイントが目標角度に到達したかチェック
   let allJointsReached = true;
-  const ANGLE_THRESHOLD = 0.05; // 約3度の許容誤差
+  const ANGLE_THRESHOLD_STRICT = 0.05; // 約3度の許容誤差（厳密）
+  const ANGLE_THRESHOLD_LOOSE = 0.15;  // 約9度の許容誤差（緩い）
+  const MAX_STEP_TIMEOUT = 10000;      // 最大10秒でタイムアウト
+
+  // デバッグ用：各ジョイントの到達状態を記録
+  const jointStatus = [];
 
   currentStep.angles.forEach((targetAngleDeg, index) => {
     const targetAngleRad = targetAngleDeg * Math.PI / 180;
     const currentAngle = joints[index]?.joint?.angle || 0;
     const angleDiff = Math.abs(targetAngleRad - currentAngle);
 
-    if (angleDiff > ANGLE_THRESHOLD) {
+    jointStatus.push({
+      name: jointNames[index],
+      target: targetAngleDeg.toFixed(1),
+      current: (currentAngle * 180 / Math.PI).toFixed(1),
+      diff: (angleDiff * 180 / Math.PI).toFixed(1),
+      reached: angleDiff <= ANGLE_THRESHOLD_STRICT
+    });
+
+    if (angleDiff > ANGLE_THRESHOLD_STRICT) {
       allJointsReached = false;
     }
   });
@@ -1087,21 +1108,62 @@ function updateProgramExecution() {
   const minDuration = Math.min(500, currentStep.duration);
   const hasMinTimePassed = elapsedTime >= minDuration;
 
-  // 全ジョイント到達 AND 最小時間経過で次へ（タイムアウトは無効）
-  const shouldMoveNext = allJointsReached && hasMinTimePassed;
+  // タイムアウト判定（最大時間経過）
+  const hasTimedOut = elapsedTime >= MAX_STEP_TIMEOUT;
+
+  // 緩い条件での到達判定（タイムアウト時のフォールバック）
+  let allJointsReachedLoose = true;
+  if (hasTimedOut) {
+    currentStep.angles.forEach((targetAngleDeg, index) => {
+      const targetAngleRad = targetAngleDeg * Math.PI / 180;
+      const currentAngle = joints[index]?.joint?.angle || 0;
+      const angleDiff = Math.abs(targetAngleRad - currentAngle);
+
+      if (angleDiff > ANGLE_THRESHOLD_LOOSE) {
+        allJointsReachedLoose = false;
+      }
+    });
+  }
+
+  // 次のステップに進む条件：
+  // 1. 厳密条件：全ジョイント到達 AND 最小時間経過
+  // 2. タイムアウト条件：最大時間経過 AND 緩い条件で到達
+  // 3. 強制タイムアウト：最大時間の1.5倍経過（無条件）
+  const shouldMoveNext =
+    (allJointsReached && hasMinTimePassed) ||
+    (hasTimedOut && allJointsReachedLoose) ||
+    (elapsedTime >= MAX_STEP_TIMEOUT * 1.5);
+
+  // デバッグログ（5秒以上経過したら詳細を表示）
+  if (elapsedTime > 5000 && Math.random() < 0.05) {
+    console.log('Step', programCurrentStep + 1, 'progress:');
+    console.log('- Elapsed:', (elapsedTime / 1000).toFixed(1), 's');
+    console.log('- Joint status:', jointStatus);
+  }
 
   if (shouldMoveNext) {
+    // 完了理由をログ
+    if (allJointsReached) {
+      console.log('Step', programCurrentStep + 1, 'completed (all joints reached)');
+    } else if (hasTimedOut && allJointsReachedLoose) {
+      console.warn('Step', programCurrentStep + 1, 'completed (timeout with loose threshold)');
+      console.log('- Not reached joints:', jointStatus.filter(j => !j.reached));
+    } else {
+      console.warn('Step', programCurrentStep + 1, 'forced completion (max timeout)');
+      console.log('- Joint status:', jointStatus);
+    }
+
     programCurrentStep++;
     programStepStartTime = currentTime;
     programStepInitialized = false; // 次のステップ用にリセット
 
     // 次のステップがある場合
     if (programCurrentStep < programSequence.length) {
-      console.log('Step', programCurrentStep, 'completed. Moving to next step.');
+      console.log('Moving to step', programCurrentStep + 1);
     } else {
       // プログラム終了
       stopProgram();
-      console.log('Program completed');
+      console.log('Program completed!');
     }
   }
 }
