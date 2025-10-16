@@ -613,6 +613,29 @@ function setupUI() {
   if (gamePanelHeader) {
     gamePanelHeader.addEventListener('click', toggleGamePanel);
   }
+
+  // Export Program button（プログラムをエクスポート）
+  const exportProgramBtn = document.getElementById('export-program-btn');
+  if (exportProgramBtn) {
+    exportProgramBtn.addEventListener('click', exportProgram);
+  }
+
+  // Import Program button（プログラムをインポート）
+  const importProgramBtn = document.getElementById('import-program-btn');
+  if (importProgramBtn) {
+    importProgramBtn.addEventListener('click', () => {
+      const fileInput = document.getElementById('import-file-input');
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+
+  // File input change handler
+  const importFileInput = document.getElementById('import-file-input');
+  if (importFileInput) {
+    importFileInput.addEventListener('change', importProgram);
+  }
 }
 
 // ゲーム開始
@@ -1042,6 +1065,132 @@ function toggleGamePanel() {
   if (!panel) return;
 
   panel.classList.toggle('collapsed');
+}
+
+// プログラムをエクスポート（テキストファイルに保存）
+function exportProgram() {
+  if (programSequence.length === 0) {
+    alert('Error: Program is empty. Nothing to export.');
+    return;
+  }
+
+  // プログラムデータをJSON形式で作成
+  const programData = {
+    version: '1.0',
+    timestamp: new Date().toISOString(),
+    steps: programSequence
+  };
+
+  // JSONを文字列化
+  const jsonString = JSON.stringify(programData, null, 2);
+
+  // Blobを作成
+  const blob = new Blob([jsonString], { type: 'application/json' });
+
+  // ダウンロードリンクを作成
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+
+  // ファイル名を生成（日時を含む）
+  const now = new Date();
+  const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.download = `robot-program-${dateStr}.json`;
+
+  // ダウンロードを実行
+  document.body.appendChild(a);
+  a.click();
+
+  // クリーンアップ
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  console.log('Program exported:', programSequence.length, 'steps');
+}
+
+// プログラムをインポート（テキストファイルから読み込み）
+function importProgram(event) {
+  const file = event.target.files[0];
+
+  if (!file) {
+    return;
+  }
+
+  // ファイルタイプチェック
+  if (!file.name.endsWith('.json')) {
+    alert('Error: Please select a JSON file (.json)');
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      const jsonString = e.target.result;
+      const programData = JSON.parse(jsonString);
+
+      // バージョンチェック（将来の互換性のため）
+      if (!programData.version) {
+        alert('Warning: Old format detected. Attempting to load...');
+      }
+
+      // プログラムステップの検証
+      if (!programData.steps || !Array.isArray(programData.steps)) {
+        throw new Error('Invalid program format: missing steps array');
+      }
+
+      // 各ステップの検証
+      for (let i = 0; i < programData.steps.length; i++) {
+        const step = programData.steps[i];
+
+        if (!step.angles || !Array.isArray(step.angles) || step.angles.length !== 6) {
+          throw new Error(`Invalid step ${i + 1}: angles must be an array of 6 numbers`);
+        }
+
+        if (typeof step.duration !== 'number' || step.duration <= 0) {
+          throw new Error(`Invalid step ${i + 1}: duration must be a positive number`);
+        }
+      }
+
+      // プログラムが実行中の場合は確認
+      if (programMode) {
+        const confirmed = confirm('Program is running. Stop and import new program?');
+        if (!confirmed) {
+          return;
+        }
+        stopProgram();
+      } else if (programSequence.length > 0) {
+        // 既存のプログラムがある場合は確認
+        const confirmed = confirm('Current program will be replaced. Continue?');
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      // プログラムをインポート
+      programSequence = programData.steps;
+      updateProgramList();
+
+      // 成功メッセージ
+      alert(`Program imported successfully!\n${programSequence.length} steps loaded.`);
+      console.log('Program imported:', programSequence.length, 'steps');
+
+    } catch (error) {
+      alert(`Error importing program:\n${error.message}`);
+      console.error('Import error:', error);
+    }
+  };
+
+  reader.onerror = function() {
+    alert('Error: Failed to read file');
+    console.error('FileReader error:', reader.error);
+  };
+
+  // ファイルをテキストとして読み込み
+  reader.readAsText(file);
+
+  // inputをリセット（同じファイルを再度選択できるように）
+  event.target.value = '';
 }
 
 // プログラムステップを更新
