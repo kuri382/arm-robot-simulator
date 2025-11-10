@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SO-ARM Web Physics Simulation</title>
+  <title>ABEJA PhysicalAI Simulator</title>
   <style>
     * {
       margin: 0;
@@ -13,7 +13,7 @@
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       overflow: hidden;
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      background: linear-gradient(135deg, #262260 0%, #2a5298 100%);
     }
     #app {
       width: 100vw;
@@ -30,27 +30,44 @@
       width: 100%;
       height: 100%;
     }
-    #controls {
+    /* 共通パネルスタイル */
+    .panel {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 20px;
+      background: rgba(255, 255, 255, 0.95);
       border-radius: 10px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      min-width: 250px;
       z-index: 100;
     }
-    #controls h2 {
-      margin-bottom: 15px;
-      color: #1e3c72;
+    .panel-header {
+      padding: 15px 20px;
+      background: #262260;
+      color: white;
+      border-radius: 10px 10px 0 0;
+    }
+    .panel-header h2 {
+      margin: 0;
       font-size: 18px;
+      font-weight: 600;
+    }
+    .panel-content {
+      padding: 20px;
+    }
+
+    #controls {
+      top: 20px;
+      left: 20px;
+      width: 280px;
+    }
+    #controls .panel-content {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
     }
     .control-group {
       margin-bottom: 15px;
     }
     .control-group label {
       display: block;
+      margin-top: 10px;
       margin-bottom: 5px;
       color: #333;
       font-size: 14px;
@@ -70,14 +87,14 @@
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: #1e3c72;
+      background: #262260;
       cursor: pointer;
     }
     .control-group input[type="range"]::-moz-range-thumb {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: #1e3c72;
+      background: #262260;
       cursor: pointer;
       border: none;
     }
@@ -88,7 +105,7 @@
       font-size: 13px;
     }
     button {
-      background: #1e3c72;
+      background: #262260;
       color: white;
       border: none;
       padding: 10px 20px;
@@ -113,6 +130,228 @@
       font-size: 12px;
       font-family: monospace;
     }
+    #game-panel {
+      bottom: 20px;
+      left: 20px;
+      width: 280px;
+      transition: transform 0.3s ease;
+    }
+    #game-panel.collapsed {
+      transform: translateY(calc(100% - 55px));
+    }
+    #game-panel.collapsed #game-panel-content {
+      display: none;
+    }
+    #game-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    #game-panel .panel-content {
+      text-align: center;
+    }
+    #game-score {
+      font-size: 48px;
+      font-weight: bold;
+      color: #2ecc71;
+      margin: 10px 0;
+    }
+    #game-timer {
+      font-size: 28px;
+      color: #262260;
+      font-weight: 600;
+      margin: 10px 0;
+    }
+    #game-panel button {
+      margin-top: 15px;
+      width: 100%;
+    }
+    #program-panel {
+      top: 20px;
+      right: 20px;
+      min-width: 360px;
+      max-width: 400px;
+      padding: 0;
+      transition: all 0.3s ease;
+    }
+    #program-panel.collapsed {
+      right: -340px;
+    }
+    #program-panel.collapsed #program-panel-content {
+      display: none;
+    }
+    #program-panel.collapsed #program-panel-header {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      padding: 40px 15px;
+      border-radius: 8px 0 0 8px;
+      cursor: pointer;
+    }
+    #program-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    #program-panel-content {
+      padding: 20px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    .collapse-icon {
+      font-size: 18px;
+      transition: transform 0.3s ease;
+      font-weight: bold;
+    }
+    #program-panel.collapsed .collapse-icon {
+      transform: rotate(180deg);
+    }
+    #game-panel.collapsed .collapse-icon {
+      transform: rotate(180deg);
+    }
+    #program-panel h3 {
+      color: #262260;
+      font-size: 14px;
+      margin-top: 15px;
+      margin-bottom: 10px;
+    }
+    #angles-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    #step-duration {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .program-controls {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .program-controls button {
+      flex: 1;
+      min-width: 100px;
+      padding: 8px 12px;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    #program-list {
+      margin-top: 10px;
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 10px;
+      background: #f9f9f9;
+    }
+    .program-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      margin-bottom: 5px;
+      background: white;
+      border-radius: 5px;
+      font-size: 11px;
+    }
+    .step-number {
+      font-weight: bold;
+      color: #262260;
+      min-width: 25px;
+    }
+    .step-angles {
+      flex: 1;
+      font-family: monospace;
+      color: #333;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .step-duration {
+      color: #666;
+      min-width: 50px;
+      text-align: right;
+    }
+    .remove-step-btn {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 10px;
+      width: auto;
+      margin: 0;
+    }
+    .remove-step-btn:hover {
+      background: #c0392b;
+    }
+    #program-status {
+      margin-top: 10px;
+      padding: 8px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .small-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+    #game-result {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.98);
+      padding: 50px;
+      border-radius: 20px;
+      text-align: center;
+      z-index: 2000;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      display: none;
+    }
+    #game-result.show {
+      display: block;
+      animation: celebrate 0.5s ease-out;
+    }
+    @keyframes celebrate {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+      50% { transform: translate(-50%, -50%) scale(1.1); }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+    #game-result h1 {
+      font-size: 48px;
+      color: #2ecc71;
+      margin-bottom: 20px;
+    }
+    #game-result .final-score {
+      font-size: 72px;
+      font-weight: bold;
+      color: #262260;
+      margin: 20px 0;
+    }
+    #confetti {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1999;
+    }
     #loading {
       position: absolute;
       top: 50%;
@@ -129,7 +368,7 @@
     }
     .spinner {
       border: 4px solid #f3f3f3;
-      border-top: 4px solid #1e3c72;
+      border-top: 4px solid #262260;
       border-radius: 50%;
       width: 40px;
       height: 40px;
@@ -149,8 +388,11 @@
       <div>シミュレーション初期化中...</div>
     </div>
     <div id="canvas-container">
-      <div id="controls">
-        <h2>🤖 SO-ARM Control</h2>
+      <div id="controls" class="panel">
+        <div class="panel-header">
+          <h2>Robot Control</h2>
+        </div>
+        <div class="panel-content">
         <div class="control-group">
           <label>
             Shoulder Pan: <span class="value-display" id="joint1-value">0°</span>
@@ -188,10 +430,70 @@
           <input type="range" id="joint6" min="-10" max="100" value="0" step="1">
         </div>
         <button id="reset">Reset Position</button>
-        <button id="toggle-grip" style="margin-top: 10px; background: #2ecc71;">Auto Grip: ON</button>
+        <button id="reset-blocks" style="background: #f39c12;">Reset Blocks</button>
+        <button id="reset-all" style="background: #e74c3c;">Reset All</button>
+        <button id="toggle-grip" style="background: #2ecc71;">Auto Grip: ON</button>
+        </div>
       </div>
       <div id="status">
-        FPS: <span id="fps">0</span> | Physics: OK | Grip: <span id="grip-status">None</span>
+        FPS: <span id="fps">0</span> | Physics: OK | Grip: <span id="grip-status">None</span> | Score: <span id="score">0</span>
+      </div>
+      <div id="game-panel" class="panel">
+        <div id="game-panel-header" class="panel-header">
+          <h2>Game Mode</h2>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div id="game-panel-content" class="panel-content">
+          <div id="game-score">0</div>
+          <div id="game-timer">2:00</div>
+          <button id="start-game">Start Game</button>
+        </div>
+      </div>
+      <canvas id="confetti"></canvas>
+      <div id="game-result">
+        <h1>🎉 Game Over! 🎉</h1>
+        <div class="final-score">0</div>
+        <p>Amazing job!</p>
+        <button id="close-result">Close</button>
+      </div>
+      <div id="program-panel" class="panel">
+        <div id="program-panel-header" class="panel-header">
+          <h2>Programming Mode</h2>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div id="program-panel-content">
+          <h3>Angle Array</h3>
+          <input type="text" id="angles-input" placeholder='[0, 0, 0, 0, 0, 0]' value='[0, 0, 0, 0, 0, 0]'>
+
+          <div class="program-controls">
+            <button id="teach-btn" class="small-btn" style="background: #2ecc71;">Teach</button>
+            <button id="set-angles-btn" class="small-btn" style="background: #3498db;">Set Angles</button>
+          </div>
+
+          <h3>Add to Program</h3>
+          <input type="number" id="step-duration" placeholder="Duration (ms)" value="1000">
+          <button id="add-step-btn" class="small-btn" style="background: #9b59b6;">Add Step</button>
+
+          <h3>Program Steps: <span id="step-count">0</span></h3>
+          <div id="program-list"></div>
+
+          <div class="program-controls">
+            <button id="run-program-btn" style="background: #27ae60;">Run</button>
+            <button id="stop-program-btn" style="background: #e67e22;" disabled>Stop</button>
+            <button id="clear-program-btn" style="background: #95a5a6;">Clear</button>
+          </div>
+
+          <h3>File Operations</h3>
+          <div class="program-controls">
+            <button id="export-program-btn" style="background: #16a085;">Export</button>
+            <button id="import-program-btn" style="background: #8e44ad;">Import</button>
+          </div>
+          <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+          <div id="program-status">
+            Status: <span id="current-step">-</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -1,196 +1,304 @@
-## 📘 ドキュメントタイトル
+# SO-ARM Web Simulator
 
-**SO-ARM Web Physics Simulation (three.js + Rapier + URDF)**
+A browser-based physics simulation environment for SO-ARM series robotic arms (SO-ARM100/101), featuring interactive control, teaching mode, and game functionality.
 
----
+## Overview
 
-## 概要
+This project provides a complete web-based simulation platform that combines 3D visualization, physics simulation, and robot control capabilities without requiring ROS dependencies. The simulator runs entirely in the browser using modern web technologies.
 
-このドキュメントは、SO-ARMシリーズのロボットアーム（例：SO-ARM100 / 101）をブラウザ上で動作させる簡易物理シミュレーション環境の構築手順を説明します。
-描画には **three.js**、物理演算には **Rapier（WASM版）** を用い、ロボットモデルは **URDFファイル** から読み込みます。
-本構成はROS依存を持たず、完全にWeb上で完結します。
+**Key Features:**
+- Real-time 3D visualization with shadows and lighting
+- Physics-based simulation with collision detection
+- Manual and programmatic robot control
+- Teaching/playback functionality for motion recording
+- Interactive game mode with scoring system
+- Auto-grip mechanism for object manipulation
 
----
+## Technology Stack
 
-## 技術スタック
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| 3D Rendering | three.js (r168+) | Scene rendering, materials, lighting |
+| Robot Model | urdf-loader (0.12.3+) | URDF parsing and kinematics |
+| Physics Engine | @dimforge/rapier3d-compat (0.14+) | Rigid body dynamics, collision detection |
+| Build Tool | Vite (5.4+) | Development server, bundling |
+| Deployment | Firebase Hosting | Production hosting |
+| Language | JavaScript (ES6+) | Implementation |
 
-| 分類     | 使用技術                             | 用途               |
-| ------ | -------------------------------- | ---------------- |
-| 描画     | three.js                         | 3Dシーン描画とマテリアル処理  |
-| モデルロード | urdf-loader                      | URDF形式のロボットモデル読込 |
-| 物理エンジン | @dimforge/rapier3d-compat (WASM) | 剛体・ジョイント・衝突計算    |
-| 通信（任意） | WebSocket / Worker               | 物理と描画を分離（性能向上）   |
-| 言語     | JavaScript / TypeScript          | 実装言語             |
-
----
-
-## ディレクトリ構成（推奨）
+## Project Structure
 
 ```
-soarm-sim/
-├─ public/
-│  ├─ soarm/
-│  │  ├─ so_arm.urdf
-│  │  └─ meshes/
-│  │     ├─ link1.stl
-│  │     ├─ link2.stl
-│  │     └─ ...
-│  └─ index.html
-├─ src/
-│  ├─ main.js
-│  ├─ physics.js
-│  ├─ renderer.js
-│  ├─ urdfLoader.js
-│  └─ control.js
-├─ package.json
-└─ vite.config.js（またはwebpack）
+Sophia/
+├── public/
+│   └── soarm/
+│       ├── so_arm.urdf          # Robot model definition
+│       └── meshes/              # 3D mesh files (.stl)
+├── src/
+│   └── main.js                  # Main simulation logic (1600+ lines)
+├── dist/                        # Build output
+├── index.html                   # Application entry point
+├── vite.config.js               # Vite configuration
+├── firebase.json                # Firebase deployment config
+├── package.json                 # Dependencies
+└── README.md                    # This file
 ```
 
----
+## Installation
 
-## 依存関係インストール
+### Prerequisites
+
+- Node.js 20.x or higher
+- npm or yarn package manager
+
+### Setup
 
 ```bash
-npm install three urdf-loader @dimforge/rapier3d-compat
-# 開発用ツールとして vite 推奨
-npm install --save-dev vite
+# Clone the repository
+git clone <repository-url>
+cd Sophia
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
 ```
 
-起動:
+The application will open automatically at `http://localhost:3000`.
+
+## Usage
+
+### Development Commands
 
 ```bash
-npx vite
+# Start development server with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build locally
+npm run preview
+
+# Build and deploy to Firebase
+npm run deploy
 ```
 
----
+### Application Features
 
-## 処理フロー概要
+#### 1. Manual Control Mode
 
-1. **URDF読込**
+Control the robot arm using six sliders for each joint:
+- **Shoulder Pan**: -110° to 110°
+- **Shoulder Lift**: -100° to 100°
+- **Elbow Flex**: -95° to 95°
+- **Wrist Flex**: -95° to 95°
+- **Wrist Roll**: -157° to 163°
+- **Gripper**: -10° to 100° (auto-grip enabled by default)
 
-   * `urdf-loader`で `/soarm/so_arm.urdf` を非同期読み込み。
-   * `URDFLink` / `URDFJoint`オブジェクトをツリー構造で保持。
+**Control Buttons:**
+- `Reset Position`: Return all joints to zero position
+- `Reset Blocks`: Reset object positions
+- `Reset All`: Complete system reset
+- `Auto Grip: ON/OFF`: Toggle automatic grip detection
 
-2. **物理ワールド生成**
+#### 2. Teaching/Programming Mode
 
-   * RapierのWorldを初期化（重力: y=-9.81）。
-   * 各リンクを剛体（RigidBody）＋Colliderとして登録。
+Record and playback motion sequences:
 
-3. **ジョイント生成**
+1. **Teach**: Capture current joint angles
+2. **Set Angles**: Apply angles from array input
+3. **Add Step**: Add current position to program sequence
+4. **Run**: Execute programmed sequence
+5. **Stop**: Interrupt execution
+6. **Clear**: Delete all program steps
 
-   * URDFの`jointType`に基づいて`revolute`や`fixed`ジョイントをRapier上で生成。
-   * 軸ベクトルはURDFの`axis xyz`を参照。
+**Input Format:**
+```javascript
+[shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper]
+// Example: [45, 30, -20, 15, 0, 50]
+```
 
-4. **制御ループ**
+**Step Properties:**
+- Angles array (6 values in degrees)
+- Duration (milliseconds)
+- Automatic transition when target reached
 
-   * 固定ステップΔt（例: 1/300秒）で物理を更新。
-   * 各関節に対してPD制御トルクを適用（`q_ref`に追従）。
+#### 3. Game Mode
 
-5. **描画ループ**
+Timed challenge to place blocks on the platform:
 
-   * three.jsで剛体姿勢をメッシュへ反映。
-   * 補間で滑らかに動作。
+- **Time Limit**: 120 seconds
+- **Objective**: Place blocks on the platform
+- **Scoring**: 10 points per block successfully placed
+- **Win Conditions**: Blocks must be stable and within platform bounds
 
----
+## Technical Implementation
 
-## コードサマリ（抜粋）
+### Architecture
 
-```js
-// main.js
-import * as THREE from 'three';
-import { URDFLoader } from 'urdf-loader';
-import('@dimforge/rapier3d-compat').then(initSimulation);
+The simulator implements a kinematic-dynamic hybrid approach:
 
-async function initSimulation(RAPIER) {
-  await RAPIER.init();
-  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+1. **Robot Control**: Kinematic position control with PD feedback
+2. **Object Physics**: Full dynamic simulation with Rapier physics
+3. **Gripping**: Kinematic attachment for stable object manipulation
+4. **Collision**: Continuous collision detection (CCD) for accurate interactions
 
-  // Three.js 基本セットアップ
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 10);
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  document.body.appendChild(renderer.domElement);
+### Key Parameters
 
-  // URDFロード
-  const loader = new URDFLoader();
-  const robot = await new Promise(r => loader.load('/soarm/so_arm.urdf', r, {
-    packages: ['/soarm/meshes/']
-  }));
-  scene.add(robot);
+```javascript
+// Control System
+Kp = 0.5          // Proportional gain (normal mode)
+Kd = 0.1          // Derivative gain (normal mode)
+Kp_FAST = 3.0     // Proportional gain (program mode)
+Kd_FAST = 0.5     // Derivative gain (program mode)
 
-  // URDFノードからRapier剛体生成
-  const map = new Map();
-  robot.traverse(node => {
-    if (node.isURDFLink) {
-      const rbDesc = node.parent ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.fixed();
-      const rb = world.createRigidBody(rbDesc);
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.03, 0.1, 0.03), rb);
-      map.set(node, rb);
-    }
-  });
+// Physics
+timestep = 1/60   // 60 Hz physics update
+dt = 1/60         // Control update rate
 
-  // URDFジョイントからRevoluteJoint生成
-  robot.traverse(node => {
-    if (node.isURDFJoint && node.jointType === 'revolute') {
-      const a = map.get(node.parent);
-      const b = map.get(node.child);
-      const axis = node.axis;
-      const jd = RAPIER.JointData.revolute({x:0,y:0,z:0}, {x:0,y:0,z:0}, axis);
-      world.createImpulseJoint(jd, a, b, true);
-    }
-  });
+// Gripping
+GRIP_THRESHOLD = 0.26     // 15° - Close threshold
+RELEASE_THRESHOLD = 0.35  // 20° - Open threshold
+GRIP_DISTANCE = 0.1       // 10 cm - Max grip range
+```
 
-  // 簡易PD制御
-  const dt = 1 / 300, Kp = 15, Kd = 0.8;
-  function step() {
-    for (const j of world.joints) {
-      const q = j.angles()[0];
-      const qd = j.angvel1().z - j.angvel2().z;
-      const tau = -Kp * (q - 0) - Kd * qd;
-      j.body2().applyTorqueImpulse({x:0, y:0, z:tau * dt}, true);
-    }
-    world.step();
-  }
+### Performance Optimizations
 
-  setInterval(step, dt * 1000);
-  renderer.setAnimationLoop(() => renderer.render(scene, camera));
+- Reduced shadow map resolution (1024×1024)
+- Selective shadow casting (important parts only)
+- Reduced physics solver iterations (4 velocity, 2 position)
+- Optimized render loop (60 FPS target)
+
+## Configuration
+
+### Vite Configuration
+
+```javascript
+// vite.config.js
+{
+  server: { port: 3000, open: true },
+  build: { outDir: 'dist' },
+  optimizeDeps: { include: ['urdf-loader'] },
+  publicDir: 'public'
 }
 ```
 
----
+### Firebase Configuration
 
-## 発展方向
+```json
+// firebase.json
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  }
+}
+```
 
-* **URDF由来の慣性パラメータ反映**（`<inertial>`タグ）
-* **ジョイントリミット**（`limit effort, velocity, lower, upper`）
-* **摩擦・衝突の微調整**（Collider friction/restitution）
-* **WebWorkerによる非同期物理**
-* **制御信号をWebSocketで受け取り実機との同期**
+## Browser Compatibility
 
----
+| Browser | Minimum Version | Status |
+|---------|----------------|--------|
+| Chrome | Latest | ✅ Fully Supported |
+| Edge | Latest | ✅ Fully Supported |
+| Firefox | Latest | ✅ Fully Supported |
+| Safari | Latest | ⚠️ Limited Testing |
 
-## 確認済み動作環境
+**Requirements:**
+- WebGL 2.0 support
+- WebAssembly support
+- ES6+ module support
 
-| 環境                        | バージョン                       |
-| ------------------------- | --------------------------- |
-| Node.js                   | 20.x 以上                     |
-| three.js                  | r168 以上                     |
-| urdf-loader               | 0.10.0 以上                   |
-| @dimforge/rapier3d-compat | 0.14.x 以上                   |
-| ブラウザ                      | Chrome / Edge / Firefox 最新版 |
+## Development Guidelines
 
----
+### Code Organization
 
-## ライセンスと出典
+The main simulation logic (`src/main.js`) is structured as follows:
 
-* SO-ARM URDFモデル: TheRobotStudio / Seeed Studio 提供
-* Rapier: [Dimforge](https://rapier.rs/)
-* urdf-loader: [gkjohnson/urdf-loaders](https://github.com/gkjohnson/urdf-loaders)
-* three.js: [https://threejs.org](https://threejs.org)
+```javascript
+// Global State Management
+init()                      // Initialize scene, physics, robot
+loadRobot()                 // Load URDF and create visual model
+setupUI()                   // Configure controls and event handlers
 
----
+// Core Loop
+animate()                   // Main render loop (60 FPS)
+  ├── updateRobot()         // PD control for joints
+  ├── updateGripping()      // Auto-grip detection
+  ├── updateRobotColliders()// Sync visual and physics
+  ├── world.step()          // Physics simulation
+  └── renderer.render()     // Render frame
 
-## 要約
+// Feature Modules
+updateProgramExecution()    // Program playback
+updateGameUI()              // Game state management
+updateScore()               // Scoring system
+```
 
-このドキュメントに沿って環境を整えれば、SO-ARMのURDFを読み込み、three.js上で描画しながらRapierで物理挙動を与える簡易ロボットシミュレーターを構築できます。
-初期段階ではPD制御＋静的床＋可視化を実装し、安定後にリミット、センサ、UIなどを追加していくのが推奨です。
+### Adding New Features
+
+1. **New Objects**: Use `createBlock()` pattern with physics body
+2. **UI Controls**: Add to `setupUI()` with event handlers
+3. **Physics Interactions**: Configure colliders in `addRobotColliders()`
+4. **Visual Effects**: Extend `animate()` loop
+
+## Troubleshooting
+
+### Common Issues
+
+**Robot not loading:**
+- Check browser console for URDF loading errors
+- Verify mesh files exist in `public/soarm/meshes/`
+- Ensure correct `BASE_URL` path resolution
+
+**Physics instability:**
+- Reduce `Kp`/`Kd` gains for smoother motion
+- Increase collision margin in collider descriptors
+- Enable CCD for fast-moving objects
+
+**Performance issues:**
+- Disable shadows: Set `renderer.shadowMap.enabled = false`
+- Lower resolution: Adjust `renderer.setPixelRatio(1)`
+- Reduce physics iterations in `world` configuration
+
+## Credits and License
+
+### Dependencies
+
+- **three.js**: MIT License - [threejs.org](https://threejs.org)
+- **urdf-loader**: MIT License - [gkjohnson/urdf-loaders](https://github.com/gkjohnson/urdf-loaders)
+- **Rapier**: Apache 2.0 License - [Dimforge/Rapier](https://rapier.rs/)
+
+### Robot Model
+
+- SO-ARM URDF provided by TheRobotStudio / Seeed Studio
+- Model files located in `public/soarm/`
+
+## Roadmap
+
+**Potential Enhancements:**
+
+- [ ] Inverse kinematics (IK) solver
+- [ ] Custom object import (.obj, .gltf)
+- [ ] Multi-robot simulation
+- [ ] WebSocket remote control
+- [ ] VR/AR support via WebXR
+- [ ] Path planning visualization
+- [ ] Force/torque feedback
+- [ ] Motion recording export (.csv, .json)
+
+## Support
+
+For issues, questions, or contributions:
+
+1. Check existing issues in the repository
+2. Review browser console for error messages
+3. Ensure dependencies are up to date (`npm update`)
+4. Verify Node.js version meets requirements
+
+## Summary
+
+This simulator provides a foundation for SO-ARM robot programming education, algorithm development, and interactive demonstrations. The modular architecture enables easy extension while maintaining performance and stability across modern browsers.
+
+**Quick Start:** `npm install && npm run dev`
